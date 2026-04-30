@@ -1,0 +1,106 @@
+version: "3.9"
+
+services:
+  manager:
+    build:
+      context: .
+      dockerfile: Dockerfile.manager
+    container_name: crackhash_manager
+    command: >
+      sh -c "
+      cd app &&
+      python manage.py migrate &&
+      python manage.py requeue_tasks &&
+      gunicorn crackhash_back.wsgi:application --bind 0.0.0.0:8000
+      "
+    ports:
+      - "8000:8000"
+    environment:
+      DJANGO_SETTINGS_MODULE: crackhash_back.settings
+      PYTHONUNBUFFERED: "1"
+
+      # Celery + RabbitMQ
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: rpc://
+
+      # CrackHash runtime
+      CRACKHASH_PART_COUNT: "4"
+      CRACKHASH_REQUEST_TIMEOUT_SECONDS: "300"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - crackhash_net
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.celery
+    container_name: crackhash_worker
+    command: >
+      sh -c "
+      cd app &&
+      celery -A crackhash_back.celery worker -l info --concurrency=8
+      "
+    environment:
+      DJANGO_SETTINGS_MODULE: crackhash_back.settings
+      PYTHONUNBUFFERED: "1"
+
+      # Celery + RabbitMQ
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: rpc://
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - crackhash_net
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: crackhash_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - crackhash_net
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    container_name: crackhash_postgres
+    environment:
+      POSTGRES_DB: crackhash
+      POSTGRES_USER: crackhash
+      POSTGRES_PASSWORD: crackhash
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crackhash"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - crackhash_net
+
+volumes:
+  postgres_data:
+
+networks:
+  crackhash_net:
+    driver: bridge
