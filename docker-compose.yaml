@@ -25,20 +25,17 @@ services:
       CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
       CELERY_RESULT_BACKEND: rpc://
 
-      # MongoDB
+      # MongoDB Replica Set
       MONGO_DB_NAME: crackhash
-      MONGO_HOST: mongodb
-      MONGO_PORT: 27017
-      MONGO_USERNAME: root
-      MONGO_PASSWORD: root
+      MONGO_URI: mongodb://root:root@mongo1:27017,mongo2:27017,mongo3:27017/crackhash?replicaSet=rs0&authSource=admin
 
       # CrackHash runtime
       CRACKHASH_PART_COUNT: "4"
       CRACKHASH_REQUEST_TIMEOUT_SECONDS: "300"
 
     depends_on:
-      mongodb:
-        condition: service_healthy
+      mongo-init-replica:
+        condition: service_completed_successfully
 
       rabbitmq:
         condition: service_healthy
@@ -69,16 +66,13 @@ services:
       CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
       CELERY_RESULT_BACKEND: rpc://
 
-      # MongoDB
+      # MongoDB Replica Set
       MONGO_DB_NAME: crackhash
-      MONGO_HOST: mongodb
-      MONGO_PORT: 27017
-      MONGO_USERNAME: root
-      MONGO_PASSWORD: root
+      MONGO_URI: mongodb://root:root@mongo1:27017,mongo2:27017,mongo3:27017/crackhash?replicaSet=rs0&authSource=admin
 
     depends_on:
-      mongodb:
-        condition: service_healthy
+      mongo-init-replica:
+        condition: service_completed_successfully
 
       rabbitmq:
         condition: service_healthy
@@ -112,10 +106,20 @@ services:
 
     restart: unless-stopped
 
-  mongodb:
+  mongo1:
     image: mongo:8
 
-    container_name: crackhash_mongodb
+    container_name: mongo1
+
+    command:
+      [
+        "mongod",
+        "--replSet",
+        "rs0",
+        "--bind_ip_all",
+        "--keyFile",
+        "/etc/mongo-keyfile/keyfile"
+      ]
 
     ports:
       - "27017:27017"
@@ -123,29 +127,147 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: root
-      MONGO_INITDB_DATABASE: crackhash
 
     volumes:
-      - mongodb_data:/data/db
+      - mongo1_data:/data/db
+      - ./keyfile:/etc/mongo-keyfile/keyfile:ro
 
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27017/test --quiet"
-        ]
-      interval: 10s
+      test: >
+        mongosh --quiet --eval "db.adminCommand('ping').ok"
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
     networks:
       - crackhash_net
 
     restart: unless-stopped
 
+  mongo2:
+    image: mongo:8
+
+    container_name: mongo2
+
+    command:
+      [
+        "mongod",
+        "--replSet",
+        "rs0",
+        "--bind_ip_all",
+        "--keyFile",
+        "/etc/mongo-keyfile/keyfile"
+      ]
+
+    ports:
+      - "27018:27017"
+
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+
+    volumes:
+      - mongo2_data:/data/db
+      - ./keyfile:/etc/mongo-keyfile/keyfile:ro
+
+    healthcheck:
+      test: >
+        mongosh --quiet --eval "db.adminCommand('ping').ok"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+    networks:
+      - crackhash_net
+
+    restart: unless-stopped
+
+  mongo3:
+    image: mongo:8
+
+    container_name: mongo3
+
+    command:
+      [
+        "mongod",
+        "--replSet",
+        "rs0",
+        "--bind_ip_all",
+        "--keyFile",
+        "/etc/mongo-keyfile/keyfile"
+      ]
+
+    ports:
+      - "27019:27017"
+
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+
+    volumes:
+      - mongo3_data:/data/db
+      - ./keyfile:/etc/mongo-keyfile/keyfile:ro
+
+    healthcheck:
+      test: >
+        mongosh --quiet --eval "db.adminCommand('ping').ok"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+    networks:
+      - crackhash_net
+
+    restart: unless-stopped
+
+  mongo-init-replica:
+    image: mongo:8
+
+    container_name: mongo_init_replica
+
+    depends_on:
+      mongo1:
+        condition: service_healthy
+
+      mongo2:
+        condition: service_healthy
+
+      mongo3:
+        condition: service_healthy
+
+    restart: "no"
+
+    networks:
+      - crackhash_net
+
+    entrypoint: >
+      bash -c '
+        sleep 10;
+
+        mongosh --host mongo1:27017 \
+          -u root \
+          -p root \
+          --authenticationDatabase admin \
+          --eval "
+            rs.initiate({
+              _id: \"rs0\",
+              members: [
+                { _id: 0, host: \"mongo1:27017\" },
+                { _id: 1, host: \"mongo2:27017\" },
+                { _id: 2, host: \"mongo3:27017\" }
+              ]
+            })
+          " || true
+      '
+
 volumes:
-  mongodb_data:
+  mongo1_data:
+  mongo2_data:
+  mongo3_data:
 
 networks:
   crackhash_net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 10.50.0.0/16

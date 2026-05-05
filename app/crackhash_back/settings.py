@@ -84,16 +84,17 @@ DATABASES = {
     "default": {
         "ENGINE": "django_mongodb_backend",
         "NAME": os.getenv("MONGO_DB_NAME", "crackhash"),
-        "CLIENT": { "host": os.getenv("MONGO_URI"), },
-        "HOST": os.getenv("MONGO_HOST", "localhost"),
-        "PORT": int(os.getenv("MONGO_PORT", 27017)),
-        "USER": os.getenv("MONGO_USERNAME", "root"),
-        "PASSWORD": os.getenv("MONGO_PASSWORD", "root"),
+        "HOST": "mongo1",
+        "PORT": 27017,
+        "USER": "root",
+        "PASSWORD": "root",
         "OPTIONS": {
+            "replicaSet": "rs0",
             "authSource": "admin",
-        },
+        }
     }
 }
+
 # Database routers
 # https://docs.djangoproject.com/en/dev/ref/settings/#database-routers
 DATABASE_ROUTERS = ["django_mongodb_backend.routers.MongoRouter"]
