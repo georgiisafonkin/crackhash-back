@@ -1,7 +1,6 @@
 import hashlib
 
 from celery import shared_task
-from django.db import transaction
 from django.db.utils import OperationalError
 from django.utils import timezone
 
@@ -91,11 +90,10 @@ def crack_hash_part(
             if digest == target_hash:
                 found_words.append(word)
 
-        with transaction.atomic():
-            for word in found_words:
-                CrackResult.objects.get_or_create(request=request, word=word)
-            part.status = PartStatus.DONE
-            part.save(update_fields=["status"])
+        for word in found_words:
+            CrackResult.objects.get_or_create(request=request, word=word)
+        part.status = PartStatus.DONE
+        part.save(update_fields=["status"])
 
         maybe_finalize_request(request.id)
         return {

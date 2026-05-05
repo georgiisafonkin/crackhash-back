@@ -9,9 +9,8 @@ https://docs.djangoproject.com/en/6.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
-import os
+
 from pathlib import Path
-from django_mongodb_backend.fields import ObjectIdAutoField
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,7 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure--x7l$ie_!7f7xt5(u3rhz&g9&*#87q4b0vd_2-(ck_3n#4t7(s'
+SECRET_KEY = 'django-insecure-1cuk+$ao+98krk0ohat7ft-@ce8vlptt7(r3b47#8z8ii$u$w1'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -38,15 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'rest_framework',
-    'django_filters',
-    'api',
-    'drf_spectacular',
+    'django_mongodb_backend',
 ]
-
-REST_FRAMEWORK = {
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -77,23 +69,18 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'crackhash_back.wsgi.application'
 
+
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASES = {
-    "default": {
-        "ENGINE": "django_mongodb_backend",
-        "NAME": os.getenv("MONGO_DB_NAME", "crackhash"),
-        "CLIENT": { "host": os.getenv("MONGO_URI"), },
-        "HOST": os.getenv("MONGO_HOST", "localhost"),
-        "PORT": int(os.getenv("MONGO_PORT", 27017)),
-        "USER": os.getenv("MONGO_USERNAME", "root"),
-        "PASSWORD": os.getenv("MONGO_PASSWORD", "root"),
-        "OPTIONS": {
-            "authSource": "admin",
-        },
-    }
+    'default': {
+        'ENGINE': 'django_mongodb_backend',
+        'HOST': 'mongodb://localhost:27017/',
+        'NAME': 'crackhash_back',
+    },
 }
+
 # Database routers
 # https://docs.djangoproject.com/en/dev/ref/settings/#database-routers
 DATABASE_ROUTERS = ["django_mongodb_backend.routers.MongoRouter"]
@@ -144,17 +131,3 @@ MIGRATION_MODULES = {
     'auth': 'mongo_migrations.auth',
     'contenttypes': 'mongo_migrations.contenttypes',
 }
-
-
-CELERY_BROKER_URL = os.getenv(
-    "CELERY_BROKER_URL",
-    "amqp://guest:guest@rabbitmq:5672//",
-)
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "rpc://")
-CELERY_TASK_DEFAULT_QUEUE = "crackhash_tasks"
-CELERY_TASK_ACKS_LATE = True
-CELERY_TASK_REJECT_ON_WORKER_LOST = True
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1
-CELERY_TASK_DEFAULT_EXCHANGE = "crackhash_exchange"
-CELERY_TASK_DEFAULT_EXCHANGE_TYPE = "direct"
-CELERY_TASK_DEFAULT_ROUTING_KEY = "crackhash.task"

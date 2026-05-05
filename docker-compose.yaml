@@ -1,11 +1,11 @@
-version: "3.9"
-
 services:
   manager:
     build:
       context: .
       dockerfile: Dockerfile.manager
+
     container_name: crackhash_manager
+
     command: >
       sh -c "
       cd app &&
@@ -13,93 +13,138 @@ services:
       python manage.py requeue_tasks &&
       gunicorn crackhash_back.wsgi:application --bind 0.0.0.0:8000
       "
+
     ports:
       - "8000:8000"
+
     environment:
       DJANGO_SETTINGS_MODULE: crackhash_back.settings
       PYTHONUNBUFFERED: "1"
 
-      # Celery + RabbitMQ
+      # Celery
       CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
       CELERY_RESULT_BACKEND: rpc://
+
+      # MongoDB
+      MONGO_DB_NAME: crackhash
+      MONGO_HOST: mongodb
+      MONGO_PORT: 27017
+      MONGO_USERNAME: root
+      MONGO_PASSWORD: root
 
       # CrackHash runtime
       CRACKHASH_PART_COUNT: "4"
       CRACKHASH_REQUEST_TIMEOUT_SECONDS: "300"
+
     depends_on:
-      postgres:
+      mongodb:
         condition: service_healthy
+
       rabbitmq:
         condition: service_healthy
+
     networks:
       - crackhash_net
+
     restart: unless-stopped
 
   worker:
     build:
       context: .
       dockerfile: Dockerfile.celery
+
     container_name: crackhash_worker
+
     command: >
       sh -c "
       cd app &&
       celery -A crackhash_back.celery worker -l info --concurrency=8
       "
+
     environment:
       DJANGO_SETTINGS_MODULE: crackhash_back.settings
       PYTHONUNBUFFERED: "1"
 
-      # Celery + RabbitMQ
+      # Celery
       CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
       CELERY_RESULT_BACKEND: rpc://
+
+      # MongoDB
+      MONGO_DB_NAME: crackhash
+      MONGO_HOST: mongodb
+      MONGO_PORT: 27017
+      MONGO_USERNAME: root
+      MONGO_PASSWORD: root
+
     depends_on:
-      postgres:
+      mongodb:
         condition: service_healthy
+
       rabbitmq:
         condition: service_healthy
+
     networks:
       - crackhash_net
+
     restart: unless-stopped
 
   rabbitmq:
     image: rabbitmq:3.13-management
+
     container_name: crackhash_rabbitmq
+
     ports:
       - "5672:5672"
       - "15672:15672"
+
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 12
+
     networks:
       - crackhash_net
+
     restart: unless-stopped
 
-  postgres:
-    image: postgres:16
-    container_name: crackhash_postgres
-    environment:
-      POSTGRES_DB: crackhash
-      POSTGRES_USER: crackhash
-      POSTGRES_PASSWORD: crackhash
+  mongodb:
+    image: mongo:8
+
+    container_name: crackhash_mongodb
+
     ports:
-      - "5432:5432"
+      - "27017:27017"
+
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+      MONGO_INITDB_DATABASE: crackhash
+
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mongodb_data:/data/db
+
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U crackhash"]
+      test:
+        [
+          "CMD-SHELL",
+          "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27017/test --quiet"
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
+
     networks:
       - crackhash_net
 
+    restart: unless-stopped
+
 volumes:
-  postgres_data:
+  mongodb_data:
 
 networks:
   crackhash_net:
