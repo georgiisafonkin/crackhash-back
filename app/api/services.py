@@ -78,12 +78,15 @@ def enqueue_request_parts(request_id: str) -> None:
     req = CrackRequest.objects.get(id=request_id)
 
     parts = req.parts.all().order_by("part_number")
-
-    for part in parts:
-        crack_hash_part.delay(
-            request_id=str(req.id),
-            hash_value=req.hash,
-            max_length=req.max_length,
-            part_number=part.part_number,
-            part_count=part.part_count,
-        )
+    try:
+        for part in parts:
+            crack_hash_part.delay(
+                request_id=str(req.id),
+                hash_value=req.hash,
+                max_length=req.max_length,
+                part_number=part.part_number,
+                part_count=part.part_count,
+            )
+    except Exception as e:
+        print(e)
+        return
