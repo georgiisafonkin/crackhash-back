@@ -35,7 +35,7 @@
 ### 1. Клонирование репозитория
 
 ```bash
-git clone https://github.com/yourusername/crackhash.git
+git clone https://github.com/georgiisafonkin/crackhash-back.git
 cd crackhash
 ```
 
