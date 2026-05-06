@@ -23,13 +23,15 @@ class CrackHashView(APIView):
     def post(self, request):
         serializer = CrackHashRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        req = create_request_with_parts(
-            hash_value=serializer.validated_data["hash"],
-            max_length=serializer.validated_data["maxLength"],
-        )
+        try:
+            req = create_request_with_parts(
+                hash_value=serializer.validated_data["hash"],
+                max_length=serializer.validated_data["maxLength"],
+            )
+        except Exception as e:
+            return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
+        
         return Response({"requestId": str(req.id)}, status=status.HTTP_201_CREATED)
-
 
 class CrackStatusView(APIView):
     @extend_schema(
